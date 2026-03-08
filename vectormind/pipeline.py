@@ -1,5 +1,6 @@
 from vectormind.ingest import load_documents
 from vectormind.chunk import chunk_documents
+from vectormind.embed import embed_chunks
 
 
 def run_pipeline():
@@ -18,6 +19,12 @@ def run_pipeline():
             "chunk_id": chunks[0]["chunk_id"],
             "text_preview": chunks[0]["text"][:120]
         })
+
+    print("Generating embeddings...")
+    embedded = embed_chunks(chunks)
+    print(f"Embeddings created: {len(embedded)}")
+    if embedded:
+        print(f"Embedding length: {len(embedded[0]['embedding'])}")
 
 
 if __name__ == "__main__":

@@ -1,6 +1,7 @@
 from vectormind.ingest import load_documents
 from vectormind.chunk import chunk_documents
 from vectormind.embed import embed_chunks
+from vectormind.vector_store import store_embeddings
 
 
 def run_pipeline():
@@ -25,6 +26,10 @@ def run_pipeline():
     print(f"Embeddings created: {len(embedded)}")
     if embedded:
         print(f"Embedding length: {len(embedded[0]['embedding'])}")
+
+    print("Storing embeddings...")
+    store_embeddings(embedded)
+    print("Embeddings stored.")
 
 
 if __name__ == "__main__":

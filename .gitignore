@@ -211,6 +211,7 @@ __marimo__/
 chroma/
 vector_db/
 *.db
+chroma_db/
 
 # Local data artifacts
 data/index/

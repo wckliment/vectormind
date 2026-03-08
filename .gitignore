@@ -216,3 +216,4 @@ chroma_db/
 # Local data artifacts
 data/index/
 data/embeddings/
+CLAUDE.md

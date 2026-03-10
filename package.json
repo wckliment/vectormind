@@ -1,0 +1,8 @@
+{
+  "name": "vectormind",
+  "scripts": {
+    "dev": ".venv/bin/uvicorn api.server:app --reload",
+    "start": ".venv/bin/uvicorn api.server:app",
+    "build-index": ".venv/bin/python -m scripts.build_index"
+  }
+}

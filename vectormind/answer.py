@@ -9,6 +9,7 @@ from vectormind.retrieve import retrieve
 
 LLM_MODEL = "gpt-4o-mini"
 SYSTEM_PROMPT = "You are a helpful assistant that answers questions using the provided context."
+DISTANCE_THRESHOLD = 0.85
 
 _client = None
 
@@ -20,14 +21,31 @@ def _get_client() -> OpenAI:
     return _client
 
 
-def answer_question(query: str, k: int = 3) -> str:
+def answer_question(query: str, k: int = 3) -> dict:
     """Retrieve relevant chunks and return a grounded answer from the LLM."""
     results = retrieve(query, k=k)
 
-    documents: list[str] = results.get("documents", [[]])[0]
-    context = "\n\n".join(documents)
+    # DEBUG: inspect what the retriever returned
+    print("\n--- RETRIEVAL DEBUG ---")
+    print("Query:", query)
+    print("Results:", results)
+    print("-----------------------\n")
 
-    user_message = f"Context:\n{context}\n\nQuestion:\n{query}\n\nAnswer:"
+    distance: float = results.get("distances", [[float("inf")]])[0][0]
+    if distance > DISTANCE_THRESHOLD:
+        return {"answer": "I do not know based on the available documents.", "sources": []}
+
+    documents: list[str] = results.get("documents", [[]])[0]
+    metadatas: list[dict] = results.get("metadatas", [[]])[0]
+    sources: list[str] = list(dict.fromkeys(m["source"] for m in metadatas if "source" in m))
+
+    numbered_chunks = "\n\n".join(f"Context {i + 1}:\n{doc}" for i, doc in enumerate(documents))
+    user_message = (
+        "You must answer the question using ONLY the provided context. "
+        "If the answer cannot be found in the context, say that you do not know.\n\n"
+        f"{numbered_chunks}\n\n"
+        f"Question:\n{query}\n\nAnswer:"
+    )
 
     client = _get_client()
     response = client.chat.completions.create(
@@ -38,4 +56,4 @@ def answer_question(query: str, k: int = 3) -> str:
         ],
     )
 
-    return response.choices[0].message.content or ""
+    return {"answer": response.choices[0].message.content or "", "sources": sources}

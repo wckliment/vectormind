@@ -1,9 +1,19 @@
 # document_loaders.py
 # Loads raw text from .txt, .md, and .pdf files for the indexing pipeline.
 
+import re
 from pathlib import Path
 
 SUPPORTED_EXTENSIONS = {".txt", ".md", ".pdf"}
+
+
+def clean_markdown(text: str) -> str:
+    """Remove HTML tags, markdown images, and noisy markup from text."""
+    text = re.sub(r"<[^>]+>", "", text)           # HTML tags
+    text = re.sub(r"!\[.*?\]\(.*?\)", "", text)    # markdown images
+    text = re.sub(r"\[(.*?)\]\(.*?\)", r"\1", text)  # markdown links → text
+    text = re.sub(r" +", " ", text)                # collapse repeated spaces
+    return text.strip()
 
 
 def load_document(path: Path) -> str:
@@ -15,7 +25,8 @@ def load_document(path: Path) -> str:
     suffix = path.suffix.lower()
 
     if suffix in {".txt", ".md"}:
-        return path.read_text(encoding="utf-8")
+        text = path.read_text(encoding="utf-8")
+        return clean_markdown(text)
 
     if suffix == ".pdf":
         from pypdf import PdfReader  # lazy import

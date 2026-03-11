@@ -39,3 +39,7 @@ def query_similar(query_embedding: list[float], k: int = 3) -> QueryResult:
     """Return the k most similar chunks to the given query embedding."""
     collection = _get_collection()
     return collection.query(query_embeddings=[query_embedding], n_results=k)
+
+def get_collection():
+    """Public accessor used by debugging endpoints."""
+    return _get_collection()

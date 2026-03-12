@@ -69,6 +69,7 @@ def _get_client() -> OpenAI:
     return _client
 
 
+<<<<<<< Updated upstream
 def answer_question(query: str, k: int = 10) -> dict:
     """Retrieve relevant chunks and return a grounded answer from the LLM."""
     results = retrieve(query, k=k)
@@ -100,14 +101,61 @@ Instructions:
 - Use clear natural language.
 - Base the answer only on the provided context.
 """
+=======
+def answer_question(query: str, k: int = 3) -> dict:
+    """Retrieve relevant chunks and return documents for streaming."""
+    results = retrieve(query, k=k)
+
+    documents: list[str] = results.get("documents", [[]])[0]
+    metadatas: list[dict] = results.get("metadatas", [[]])[0]
+    sources: list[str] = list(dict.fromkeys(
+        m["source"] for m in metadatas if "source" in m
+    ))
+
+    return {
+        "documents": documents,
+        "sources": sources,
+    }
+
+
+def stream_answer(query: str, documents: list[str]):
+    """
+    Stream the LLM response token-by-token using the prepared RAG context.
+    """
+>>>>>>> Stashed changes
 
     client = _get_client()
+
+    context = "\n\n".join(
+        f"Context {i + 1}:\n{doc}"
+        for i, doc in enumerate(documents)
+    )
+
     response = client.chat.completions.create(
         model=LLM_MODEL,
         messages=[
             {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": user_message},
+            {
+                "role": "user",
+                "content": f"""Use the context below to answer the user's question.
+
+Question:
+{query}
+
+Context:
+{context}
+"""
+            }
         ],
+        temperature=0,
+        stream=True
     )
 
+<<<<<<< Updated upstream
     return {"answer": response.choices[0].message.content or "", "sources": sources}
+=======
+    for chunk in response:
+        delta = chunk.choices[0].delta
+        if delta and delta.content:
+            yield delta.content
+>>>>>>> Stashed changes

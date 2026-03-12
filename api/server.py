@@ -1,6 +1,7 @@
 # server.py
 # FastAPI application exposing the VectorMind RAG pipeline.
 
+<<<<<<< Updated upstream
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -11,6 +12,13 @@ from vectormind.answer import answer_question
 from vectormind.retrieve import retrieve
 from vectormind.vector_store import get_collection
 
+=======
+from fastapi import FastAPI
+from fastapi.responses import StreamingResponse
+from pydantic import BaseModel
+
+from vectormind.answer import answer_question, stream_answer
+>>>>>>> Stashed changes
 
 app = FastAPI()
 
@@ -19,6 +27,7 @@ class QueryRequest(BaseModel):
     query: str
 
 
+<<<<<<< Updated upstream
 @app.get("/health")
 def health() -> dict:
     return {"status": "ok"}
@@ -62,3 +71,17 @@ def retrieve_endpoint(request: QueryRequest) -> dict:
 @app.post("/query")
 def query(request: QueryRequest) -> dict:
     return answer_question(request.query)
+=======
+@app.post("/query")
+def query(request: QueryRequest):
+
+    result = answer_question(request.query)
+
+    documents = result.get("documents", [])
+
+    def generator():
+        for token in stream_answer(request.query, documents):
+            yield token
+
+    return StreamingResponse(generator(), media_type="text/plain")
+>>>>>>> Stashed changes

@@ -69,9 +69,40 @@ def _get_client() -> OpenAI:
     return _client
 
 
-def answer_question(query: str, k: int = 10) -> dict:
+def rewrite_query(query: str, history: list) -> str:
+    """Rewrite the user's latest question into a standalone search query using conversation history."""
+    client = _get_client()
+
+    history_text = "\n".join(
+        f"{msg['role'].capitalize()}: {msg['content']}"
+        for msg in history
+    )
+
+    response = client.chat.completions.create(
+        model=LLM_MODEL,
+        messages=[
+            {
+                "role": "system",
+                "content": (
+                    "Rewrite the user's latest question so it can be understood without "
+                    "the conversation history. Only output the rewritten query, nothing else."
+                ),
+            },
+            {
+                "role": "user",
+                "content": f"Conversation history:\n{history_text}\n\nLatest question: {query}",
+            },
+        ],
+        temperature=0,
+    )
+
+    return response.choices[0].message.content.strip()
+
+
+def answer_question(query: str, k: int = 10, history: list | None = None) -> dict:
     """Run the full RAG pipeline and return prepared documents for streaming."""
-    results = retrieve(query, k=k)
+    retrieval_query = rewrite_query(query, history) if history else query
+    results = retrieve(retrieval_query, k=k)
 
     distance: float = results.get("distances", [[float("inf")]])[0][0]
     if distance > DISTANCE_THRESHOLD:
@@ -91,7 +122,7 @@ def answer_question(query: str, k: int = 10) -> dict:
     }
 
 
-def stream_answer(query: str, documents: list[str]):
+def stream_answer(query: str, documents: list[str], history: list | None = None):
     """Stream the LLM response token-by-token using the prepared RAG context."""
     client = _get_client()
 
@@ -100,13 +131,14 @@ def stream_answer(query: str, documents: list[str]):
         for i, doc in enumerate(documents)
     )
 
-    response = client.chat.completions.create(
-        model=LLM_MODEL,
-        messages=[
-            {"role": "system", "content": SYSTEM_PROMPT},
-            {
-                "role": "user",
-                "content": f"""Use the context below to answer the user's question.
+    messages = [{"role": "system", "content": SYSTEM_PROMPT}]
+
+    if history:
+        messages.extend(history)
+
+    messages.append({
+        "role": "user",
+        "content": f"""Use the context below to answer the user's question.
 
 Question:
 {query}
@@ -114,8 +146,11 @@ Question:
 Context:
 {context}
 """
-            }
-        ],
+    })
+
+    response = client.chat.completions.create(
+        model=LLM_MODEL,
+        messages=messages,
         temperature=0,
         stream=True
     )

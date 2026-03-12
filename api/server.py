@@ -5,6 +5,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from fastapi import FastAPI, Query
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
@@ -14,6 +15,14 @@ from vectormind.vector_store import get_collection
 
 
 app = FastAPI()
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # allow local UI during development
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 class QueryRequest(BaseModel):
@@ -50,7 +59,9 @@ def retrieve_endpoint(request: QueryRequest) -> dict:
     metadata: list[dict] = results.get("metadatas", [[]])[0]
     distances: list[float] = results.get("distances", [[]])[0]
 
-    sources = [m["source"] for m in metadata if "source" in m]
+    sources = list(dict.fromkeys(
+        m["source"] for m in metadata if "source" in m
+    ))
 
     return {
         "query": request.query,

@@ -1,24 +1,17 @@
 # server.py
 # FastAPI application exposing the VectorMind RAG pipeline.
 
-<<<<<<< Updated upstream
 from dotenv import load_dotenv
 load_dotenv()
 
 from fastapi import FastAPI, Query
-from pydantic import BaseModel
-
-from vectormind.answer import answer_question
-from vectormind.retrieve import retrieve
-from vectormind.vector_store import get_collection
-
-=======
-from fastapi import FastAPI
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from vectormind.answer import answer_question, stream_answer
->>>>>>> Stashed changes
+from vectormind.retrieve import retrieve
+from vectormind.vector_store import get_collection
+
 
 app = FastAPI()
 
@@ -27,7 +20,6 @@ class QueryRequest(BaseModel):
     query: str
 
 
-<<<<<<< Updated upstream
 @app.get("/health")
 def health() -> dict:
     return {"status": "ok"}
@@ -39,12 +31,12 @@ def documents(limit: int = Query(default=10, ge=1)) -> dict:
     collection = get_collection()
     result = collection.get()
 
-    documents = result.get("documents", [])
+    docs = result.get("documents", [])
     metadatas = result.get("metadatas", [])
     ids = result.get("ids", [])
 
     return {
-        "documents": documents[:limit],
+        "documents": docs[:limit],
         "metadatas": metadatas[:limit],
         "ids": ids[:limit],
     }
@@ -69,19 +61,26 @@ def retrieve_endpoint(request: QueryRequest) -> dict:
 
 
 @app.post("/query")
-def query(request: QueryRequest) -> dict:
-    return answer_question(request.query)
-=======
-@app.post("/query")
 def query(request: QueryRequest):
+    """
+    Streaming RAG endpoint.
+    Runs the full pipeline and streams the LLM answer.
+    """
 
     result = answer_question(request.query)
-
     documents = result.get("documents", [])
 
+    if not documents:
+        return StreamingResponse(
+            iter(["I do not know based on the available documents."]),
+            media_type="text/plain",
+        )
+
     def generator():
-        for token in stream_answer(request.query, documents):
-            yield token
+        try:
+            for token in stream_answer(request.query, documents):
+                yield token
+        except Exception:
+            yield "\n[Error: response generation failed]"
 
     return StreamingResponse(generator(), media_type="text/plain")
->>>>>>> Stashed changes

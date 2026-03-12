@@ -217,4 +217,6 @@ chroma_db/
 data/index/
 data/embeddings/
 CLAUDE.md
+
+# Local documents used for indexing
 documents/

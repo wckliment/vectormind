@@ -221,3 +221,4 @@ CLAUDE.md
 # Local documents used for indexing
 documents/
 *.pdf
+corpus_downloads/

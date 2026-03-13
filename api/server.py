@@ -44,17 +44,29 @@ def health() -> dict:
 def documents(limit: int = Query(default=10, ge=1)) -> dict:
     """Debug endpoint that returns a limited number of stored chunks."""
     collection = get_collection()
-    result = collection.get()
+    result = collection.get(limit=limit)
 
     docs = result.get("documents") or []
     metadatas = result.get("metadatas") or []
     ids = result.get("ids") or []
 
     return {
-        "documents": docs[:limit],
-        "metadatas": metadatas[:limit],
-        "ids": ids[:limit],
+        "documents": docs,
+        "metadatas": metadatas,
+        "ids": ids,
     }
+
+
+@app.get("/sources")
+def sources() -> dict:
+    """Return all unique document source names indexed in the vector store."""
+    collection = get_collection()
+    result = collection.get(include=["metadatas"])
+    metadatas = result.get("metadatas") or []
+    unique = list(dict.fromkeys(
+        m["source"] for m in metadatas if m and "source" in m
+    ))
+    return {"sources": unique}
 
 
 @app.post("/retrieve")

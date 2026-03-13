@@ -1,0 +1,13 @@
+[
+  { "question": "What is ColBERT?", "expected_source": "colbert_paper.pdf" },
+  { "question": "What is retrieval augmented generation?", "expected_source": "rag_paper.pdf" },
+  { "question": "How do you install FastAPI?", "expected_source": "fastapi.md" },
+  { "question": "What does RAG stand for?", "expected_source": "rag_paper.pdf" },
+  { "question": "What is late interaction in ColBERT?", "expected_source": "colbert_paper.pdf" },
+  { "question": "How does FastAPI create routes?", "expected_source": "fastapi.md" },
+  { "question": "What library is used to build APIs in the FastAPI document?", "expected_source": "fastapi.md" },
+  { "question": "What problem does retrieval augmented generation solve?", "expected_source": "rag_paper.pdf" },
+  { "question": "Why are neural retrievers used?", "expected_source": "rag_paper.pdf" },
+  { "question": "How does ColBERT improve search efficiency?", "expected_source": "colbert_paper.pdf" },
+  { "question": "What is a neural retriever?", "expected_source": "rag_paper.pdf" }
+]

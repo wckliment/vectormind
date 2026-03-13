@@ -689,12 +689,10 @@
 
     async function loadDocuments() {
       try {
-        const res = await fetch("http://127.0.0.1:8000/documents?limit=500");
+        const res = await fetch("http://127.0.0.1:8000/sources");
         if (!res.ok) return;
         const data = await res.json();
-        const metadata = data.metadatas || [];
-        const uniqueSources = [...new Set(metadata.map(m => m.source).filter(Boolean))];
-        renderLibrarySources(uniqueSources);
+        renderLibrarySources(data.sources || []);
       } catch (_) {
         // backend not yet running — silently ignore
       }

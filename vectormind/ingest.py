@@ -58,6 +58,7 @@ def ingest_document(file_path: Path) -> int:
     from vectormind.chunk import chunk_documents
     from vectormind.embed import embed_chunks
     from vectormind.vector_store import store_embeddings
+    from vectormind.retrieve import invalidate_bm25_cache
 
     text = load_document(file_path)
 
@@ -69,5 +70,6 @@ def ingest_document(file_path: Path) -> int:
 
     embedded = embed_chunks(chunks)
     store_embeddings(embedded)
+    invalidate_bm25_cache()
 
     return len(chunks)

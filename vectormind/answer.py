@@ -117,9 +117,9 @@ def answer_question(query: str, k: int = 10, history: list | None = None) -> dic
     metadatas: list[dict] = results.get("metadatas", [[]])[0]
     sources: list[str] = list(dict.fromkeys(m["source"] for m in metadatas if "source" in m))
 
-    # Build chunk-text → source lookup before reranking discards metadatas.
-    source_map: dict[str, str] = {
-        doc: meta.get("source", "unknown")
+    # Build chunk-text → {source, chunk_id} lookup before reranking discards metadatas.
+    meta_map: dict[str, dict] = {
+        doc: {"source": meta.get("source", "unknown"), "chunk_id": meta.get("chunk_id", 0)}
         for doc, meta in zip(documents, metadatas)
     }
 
@@ -127,11 +127,9 @@ def answer_question(query: str, k: int = 10, history: list | None = None) -> dic
     documents = compress_context(query, documents)
     documents = pack_context(documents)
 
-    # Pair each compressed sentence with the source of its closest full chunk.
-    # compress_context scores sentences by keyword overlap with the query; the
-    # reranked chunks are small enough that a simple best-match lookup is fine.
+    # Pair each compressed sentence with the source/chunk_id of its closest full chunk.
     labeled_chunks: list[dict] = [
-        {"text": doc, "source": _closest_source(doc, source_map)}
+        {"text": doc, **_closest_meta(doc, meta_map)}
         for doc in documents
     ]
 
@@ -142,17 +140,17 @@ def answer_question(query: str, k: int = 10, history: list | None = None) -> dic
     }
 
 
-def _closest_source(sentence: str, source_map: dict[str, str]) -> str:
-    """Return the source of the chunk that shares the most tokens with sentence."""
+def _closest_meta(sentence: str, meta_map: dict[str, dict]) -> dict:
+    """Return {source, chunk_id} of the chunk that shares the most tokens with sentence."""
     sentence_tokens = set(sentence.lower().split())
-    best_source = "unknown"
+    best_meta = {"source": "unknown", "chunk_id": 0}
     best_overlap = -1
-    for chunk_text, source in source_map.items():
+    for chunk_text, meta in meta_map.items():
         overlap = len(sentence_tokens & set(chunk_text.lower().split()))
         if overlap > best_overlap:
             best_overlap = overlap
-            best_source = source
-    return best_source
+            best_meta = meta
+    return best_meta
 
 
 def stream_answer(

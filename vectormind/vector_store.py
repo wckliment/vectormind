@@ -43,3 +43,31 @@ def query_similar(query_embedding: list[float], k: int = 3) -> QueryResult:
 def get_collection():
     """Public accessor used by debugging endpoints."""
     return _get_collection()
+
+
+def list_sources() -> list[dict]:
+    """Return all unique sources and their chunk counts."""
+    collection = _get_collection()
+    result = collection.get(include=["metadatas"])
+    metadatas: list[dict] = result.get("metadatas") or []
+
+    counts: dict[str, int] = {}
+    for meta in metadatas:
+        if meta and "source" in meta:
+            src = str(meta["source"])
+            counts[src] = counts.get(src, 0) + 1
+
+    return [{"name": src, "chunks": count} for src, count in counts.items()]
+
+
+def delete_source(source: str) -> int:
+    """Delete all chunks belonging to source. Returns the number of chunks removed."""
+    collection = _get_collection()
+
+    result = collection.get(where={"source": source}, include=[])
+    ids: list[str] = result.get("ids") or []
+
+    if ids:
+        collection.delete(ids=ids)
+
+    return len(ids)

@@ -560,6 +560,15 @@
 
     .empty-state .icon { font-size: 40px; opacity: 0.4; }
     .empty-state p { font-size: 14px; font-weight: 500; }
+
+    .doc-chunk { padding: 4px 0; }
+
+    .chunk-highlight {
+      background: rgba(59, 130, 246, 0.15);
+      border-left: 3px solid #3b82f6;
+      padding-left: 8px;
+      border-radius: 2px;
+    }
   </style>
 </head>
 <body>
@@ -632,26 +641,84 @@
       messagesEl.scrollTop = messagesEl.scrollHeight;
     }
 
+    /* ── HTML stripper — converts embedded HTML tags to plain text ── */
+    function stripHtml(html) {
+      const div = document.createElement("div");
+      div.innerHTML = html;
+      return div.textContent || div.innerText || "";
+    }
+
+    /* ── Chunking helper — mirrors chunk_document() in vectormind/chunk.py ── */
+    function chunkText(text, chunkSize = 1000, overlap = 150) {
+      const step = chunkSize - overlap;
+      const chunks = [];
+      for (let start = 0; start < text.length; start += step) {
+        const chunk = text.slice(start, start + chunkSize);
+        if (chunk.trim()) chunks.push(chunk);
+      }
+      return chunks;
+    }
+
     /* ── Source drawer ── */
-    async function openSourceDrawer(src) {
-      const response = await fetch("http://127.0.0.1:8000/documents?limit=500");
-      if (!response.ok) return;
-      const data = await response.json();
-      const documents = data.documents;
-      const metadata = data.metadatas;
-      let chunks = [];
-      for (let i = 0; i < metadata.length; i++) {
-        if (metadata[i].source === src) {
-          chunks.push(documents[i]);
+    async function openSourceDrawer(src, chunkIndex = null) {
+      const drawerTitle   = document.getElementById("drawer-title");
+      const drawerContent = document.getElementById("drawer-content");
+      const drawer        = document.getElementById("source-drawer");
+
+      drawerTitle.textContent = src;
+      drawerContent.innerHTML = "<em style='color:#475569'>Loading…</em>";
+      drawer.classList.add("open");
+
+      const ext = src.split(".").pop().toLowerCase();
+
+      if (ext === "pdf") {
+        drawerContent.innerHTML =
+          `<iframe src="http://127.0.0.1:8000/documents/${encodeURIComponent(src)}"
+            style="width:100%;height:100%;border:none;min-height:calc(100vh - 56px)">
+          </iframe>`;
+        return;
+      }
+
+      try {
+        const res = await fetch(`http://127.0.0.1:8000/documents/${encodeURIComponent(src)}`);
+        if (!res.ok) {
+          drawerContent.innerHTML = "<em style='color:#f87171'>Document not found.</em>";
+          return;
         }
+        const data = await res.json();
+        let cleanText = stripHtml(data.content);
+        cleanText = cleanText.replace(/:::.*/g, "");
+        const chunks = chunkText(cleanText);
+
+        // Clear any previous highlights then render chunks as individually addressable divs.
+        drawerContent.innerHTML = "";
+        chunks.forEach((chunk, i) => {
+          const div = document.createElement("div");
+          div.classList.add("doc-chunk");
+          div.id = `chunk-${i}`;
+          if (ext === "md") {
+            div.innerHTML = marked.parse(chunk);
+          } else {
+            const pre = document.createElement("pre");
+            pre.style.whiteSpace = "pre-wrap";
+            pre.style.wordBreak  = "break-word";
+            pre.textContent = chunk;
+            div.appendChild(pre);
+          }
+          drawerContent.appendChild(div);
+        });
+
+        // Scroll to and highlight the target chunk, if specified.
+        if (chunkIndex !== null) {
+          const target = document.getElementById(`chunk-${chunkIndex}`);
+          if (target) {
+            target.scrollIntoView({ behavior: "smooth", block: "center" });
+            target.classList.add("chunk-highlight");
+          }
+        }
+      } catch (_) {
+        drawerContent.innerHTML = "<em style='color:#f87171'>Failed to load preview.</em>";
       }
-      let content = "Document preview not found.";
-      if (chunks.length > 0) {
-        content = chunks.join("\n\n---\n\n");
-      }
-      document.getElementById("drawer-title").textContent = src;
-      document.getElementById("drawer-content").innerHTML = marked.parse(content);
-      document.getElementById("source-drawer").classList.add("open");
     }
 
     /* ── Knowledge Base: load and render library chips ── */
@@ -662,10 +729,11 @@
         container.innerHTML = `<div id="library-empty">${emptyMessage}</div>`;
         return;
       }
-      // sources can be plain strings or {source, snippet} objects
+      // sources can be plain strings, {source, snippet} objects, or {name, chunks} objects
       for (const item of sources) {
-        const src = typeof item === "string" ? item : item.source;
-        const snippet = typeof item === "string" ? null : item.snippet;
+        const src     = typeof item === "string" ? item : (item.name ?? item.source);
+        const snippet = typeof item === "object" ? item.snippet ?? null : null;
+        const chunks  = typeof item === "object" ? item.chunks  ?? null : null;
 
         const chip = document.createElement("div");
         chip.classList.add("library-chip");
@@ -673,7 +741,7 @@
 
         const name = document.createElement("div");
         name.classList.add("library-title");
-        name.textContent = "📄 " + src;
+        name.textContent = "📄 " + src + (chunks !== null ? ` (${chunks})` : "");
         chip.appendChild(name);
 
         if (snippet) {
@@ -687,9 +755,9 @@
       }
     }
 
-    async function loadDocuments() {
+    async function loadLibrary() {
       try {
-        const res = await fetch("http://127.0.0.1:8000/sources");
+        const res = await fetch("http://127.0.0.1:8000/library");
         if (!res.ok) return;
         const data = await res.json();
         renderLibrarySources(data.sources || []);
@@ -714,7 +782,7 @@
       const text = e.target.value.trim();
       if (!text) {
         currentLibraryQuery = "";
-        loadDocuments();
+        loadLibrary();
         return;
       }
       _searchTimer = setTimeout(async () => {
@@ -730,6 +798,7 @@
           renderLibrarySources(data.results || [], "No matching documents");
         } catch (_) {}
       }, 300);
+
     });
 
     /* ── File upload ── */
@@ -760,7 +829,7 @@
         const result = await response.json();
         statusEl.className = "success";
         statusEl.textContent = `✓ ${result.chunks_added} chunks indexed`;
-        await loadDocuments();
+        await loadLibrary();
       } catch (err) {
         statusEl.className = "error";
         statusEl.textContent = "Connection error";
@@ -811,7 +880,8 @@
       return { wrapper, bubble };
     }
 
-    function renderSources(wrapper, sources) {
+    // citations: array of {source, chunk_id, text} objects OR plain strings (fallback).
+    function renderSources(wrapper, citations) {
       const container = document.createElement("div");
       container.classList.add("sources");
 
@@ -821,12 +891,18 @@
 
       const list = document.createElement("div");
       list.classList.add("sources-list");
-      for (const src of sources) {
-        const chip = document.createElement("span");
+
+      for (const item of citations) {
+        const src      = typeof item === "string" ? item : item.source;
+        const chunkId  = typeof item === "object"  ? item.chunk_id ?? null : null;
+
+        const chip = document.createElement("button");
         chip.classList.add("source-chip");
+        chip.setAttribute("data-source", src);
+        if (chunkId !== null) chip.setAttribute("data-chunk", chunkId);
         chip.textContent = "📄 " + src;
         chip.style.cursor = "pointer";
-        chip.onclick = () => openSourceDrawer(src);
+        chip.onclick = () => openSourceDrawer(src, chunkId);
         list.appendChild(chip);
       }
 
@@ -890,9 +966,9 @@
 
         if (retrieveResponse.ok) {
           const data = await retrieveResponse.json();
-          const sources = data.sources || [];
-          if (sources.length > 0) {
-            renderSources(wrapper, sources);
+          const citations = data.citations || data.sources || [];
+          if (citations.length > 0) {
+            renderSources(wrapper, citations);
           }
         }
       } catch (err) {
@@ -918,7 +994,7 @@
     });
 
     // Populate library on load
-    loadDocuments();
+    loadLibrary();
   </script>
 
   <div id="source-drawer">

@@ -9,14 +9,14 @@ from pathlib import Path
 
 from fastapi import FastAPI, File, HTTPException, Query, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel
 
 from vectormind.answer import answer_question, stream_answer
 from vectormind.embed import embed_chunks
 from vectormind.ingest import UPLOAD_SUPPORTED_EXTENSIONS, ingest_document
-from vectormind.retrieve import retrieve
-from vectormind.vector_store import get_collection, query_similar
+from vectormind.retrieve import retrieve, invalidate_bm25_cache
+from vectormind.vector_store import get_collection, query_similar, list_sources, delete_source
 
 
 app = FastAPI()
@@ -81,10 +81,22 @@ def retrieve_endpoint(request: QueryRequest) -> dict:
         m["source"] for m in metadata if "source" in m
     ))
 
+    # Rich citations for UI deep-linking: one entry per unique (source, chunk_id) pair.
+    seen: set[tuple] = set()
+    citations: list[dict] = []
+    for doc, meta in zip(documents, metadata):
+        src = meta.get("source", "")
+        chunk_id = int(meta.get("chunk_id", 0))
+        key = (src, chunk_id)
+        if key not in seen:
+            seen.add(key)
+            citations.append({"source": src, "chunk_id": chunk_id, "text": doc[:200]})
+
     return {
         "query": request.query,
         "documents": documents,
         "sources": sources,
+        "citations": citations,
         "distances": distances,
     }
 
@@ -142,6 +154,56 @@ async def upload(file: UploadFile = File(...)) -> dict:
         tmp_path.unlink(missing_ok=True)
 
     return {"status": "success", "filename": file.filename, "chunks_added": chunks_added}
+
+
+@app.get("/library")
+def library() -> dict:
+    """Return all indexed sources with their chunk counts."""
+    return {"sources": list_sources()}
+
+
+_CORPUS_DIRS = [
+    Path(__file__).parent.parent / "corpus_downloads",
+    Path(__file__).parent.parent / "data" / "docs",
+]
+
+
+@app.get("/documents/{source:path}")
+def get_document(source: str):
+    """Return the raw content of an indexed source document."""
+    filename = Path(source).name  # strip any accidental path traversal
+    suffix = Path(filename).suffix.lower()
+
+    for corpus_dir in _CORPUS_DIRS:
+        candidate = corpus_dir / filename
+        if candidate.exists():
+            if suffix == ".pdf":
+                return FileResponse(
+                    str(candidate),
+                    media_type="application/pdf",
+                    filename=filename,
+                )
+            content = candidate.read_text(encoding="utf-8", errors="replace")
+            return {"source": filename, "content": content}
+
+    raise HTTPException(status_code=404, detail=f"Document '{source}' not found.")
+
+
+@app.delete("/documents/{source:path}")
+def delete_document(source: str) -> dict:
+    """Delete all chunks for a given source from the vector store."""
+    removed = delete_source(source)
+    if removed == 0:
+        raise HTTPException(status_code=404, detail=f"Source '{source}' not found.")
+    invalidate_bm25_cache()
+    return {"status": "deleted", "source": source}
+
+
+@app.post("/reindex")
+def reindex() -> dict:
+    """Invalidate the BM25 cache so it is rebuilt from current ChromaDB contents on next query."""
+    invalidate_bm25_cache()
+    return {"status": "ok", "message": "BM25 index invalidated and will rebuild on next retrieval."}
 
 
 @app.post("/library-search")

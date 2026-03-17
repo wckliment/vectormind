@@ -98,6 +98,7 @@ def query(request: QueryRequest):
 
     result = answer_question(request.query, history=request.history)
     documents = result.get("documents", [])
+    labeled_chunks = result.get("labeled_chunks")
 
     if not documents:
         return StreamingResponse(
@@ -107,7 +108,9 @@ def query(request: QueryRequest):
 
     def generator():
         try:
-            for token in stream_answer(request.query, documents, request.history):
+            for token in stream_answer(
+                request.query, documents, request.history, labeled_chunks=labeled_chunks
+            ):
                 yield token
         except Exception:
             yield "\n[Error: response generation failed]"

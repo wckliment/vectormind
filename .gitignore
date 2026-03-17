@@ -222,3 +222,4 @@ CLAUDE.md
 documents/
 *.pdf
 corpus_downloads/
+.claude/

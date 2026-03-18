@@ -15,7 +15,7 @@
     body {
       min-height: 100vh;
       background: linear-gradient(135deg, #0a0e1a 0%, #0d1b2e 50%, #0a1628 100%);
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
       display: flex;
       flex-direction: column;
       align-items: center;
@@ -267,12 +267,13 @@
     .message {
       display: flex;
       flex-direction: column;
-      max-width: 80%;
-      animation: fadeSlideIn 0.2s ease-out;
+      max-width: 720px;
+      line-height: 1.6;
+      animation: fadeInUp 0.25s ease-out;
     }
 
-    @keyframes fadeSlideIn {
-      from { opacity: 0; transform: translateY(8px); }
+    @keyframes fadeInUp {
+      from { opacity: 0; transform: translateY(6px); }
       to   { opacity: 1; transform: translateY(0); }
     }
 
@@ -401,7 +402,7 @@
       font-size: 13px;
       color: rgba(148, 163, 184, 0.7);
       max-width: 100%;
-      animation: fadeSlideIn 0.2s ease-out;
+      animation: fadeInUp 0.2s ease-out;
     }
 
     .sources-title {
@@ -422,11 +423,18 @@
     .source-chip {
       background: rgba(255, 255, 255, 0.05);
       border: 1px solid rgba(255, 255, 255, 0.08);
-      border-radius: 6px;
-      padding: 3px 8px;
+      border-radius: 8px;
+      padding: 4px 8px;
       font-size: 12px;
       font-family: monospace;
       color: rgba(200, 210, 220, 0.8);
+      transition: all 0.15s ease;
+    }
+
+    .source-chip:hover {
+      background: rgba(255, 255, 255, 0.1);
+      border-color: rgba(255, 255, 255, 0.15);
+      transform: translateY(-1px);
     }
 
     /* Source drawer */
@@ -517,8 +525,9 @@
     #query-input::placeholder { color: #475569; }
 
     #query-input:focus {
-      border-color: rgba(99, 102, 241, 0.5);
+      border-color: #3b82f6;
       background: rgba(255, 255, 255, 0.07);
+      outline: none;
     }
 
     #send-btn {
@@ -561,14 +570,102 @@
     .empty-state .icon { font-size: 40px; opacity: 0.4; }
     .empty-state p { font-size: 14px; font-weight: 500; }
 
-    .doc-chunk { padding: 4px 0; }
+    .doc-chunk {
+      padding: 4px 0;
+      margin-bottom: 16px;
+      line-height: 1.65;
+      font-size: 14px;
+    }
 
     .chunk-highlight {
       background: rgba(59, 130, 246, 0.15);
       border-left: 3px solid #3b82f6;
       padding-left: 8px;
       border-radius: 2px;
+      animation: highlightFade 1.8s ease-out;
     }
+
+    @keyframes highlightFade {
+      from { background: rgba(59, 130, 246, 0.35); }
+      to   { background: rgba(59, 130, 246, 0.15); }
+    }
+
+    /* Thinking spinner */
+    .thinking-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: #64748b;
+      font-size: 14px;
+    }
+
+    .spinner {
+      border: 2px solid rgba(255, 255, 255, 0.1);
+      border-top: 2px solid #3b82f6;
+      border-radius: 50%;
+      width: 14px;
+      height: 14px;
+      flex-shrink: 0;
+      animation: spin 1s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    /* Retrieval debug panel */
+    .debug-panel {
+      margin-top: 8px;
+      border-top: 1px solid rgba(255, 255, 255, 0.08);
+      padding-top: 6px;
+    }
+
+    .debug-header {
+      font-size: 12px;
+      color: #94a3b8;
+      cursor: pointer;
+      user-select: none;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .debug-header:hover { color: #cbd5e1; }
+
+    .debug-body {
+      font-size: 12px;
+      color: #64748b;
+      margin-top: 6px;
+      line-height: 1.6;
+    }
+
+    .debug-body .debug-count {
+      margin-bottom: 4px;
+      color: #475569;
+    }
+
+    .debug-citation {
+      padding: 2px 0;
+      font-family: "SF Mono", "Fira Code", Consolas, monospace;
+    }
+
+    .debug-snippet {
+      font-size: 11px;
+      color: #94a3b8;
+      margin-left: 8px;
+      margin-top: 2px;
+      line-height: 1.4;
+      font-family: inherit;
+    }
+
+    mark {
+      background: rgba(59, 130, 246, 0.3);
+      color: inherit;
+      border-radius: 2px;
+      padding: 0 2px;
+    }
+
+    .hidden { display: none; }
   </style>
 </head>
 <body>
@@ -881,7 +978,7 @@
     }
 
     // citations: array of {source, chunk_id, text} objects OR plain strings (fallback).
-    function renderSources(wrapper, citations) {
+    function renderSources(wrapper, citations, query = "") {
       const container = document.createElement("div");
       container.classList.add("sources");
 
@@ -902,12 +999,76 @@
         if (chunkId !== null) chip.setAttribute("data-chunk", chunkId);
         chip.textContent = "📄 " + src;
         chip.style.cursor = "pointer";
+        if (typeof item === "object" && item.text) chip.title = item.text;
         chip.onclick = () => openSourceDrawer(src, chunkId);
         list.appendChild(chip);
       }
 
       container.appendChild(title);
       container.appendChild(list);
+
+      // Debug panel
+      const debugPanel = document.createElement("div");
+      debugPanel.classList.add("debug-panel");
+
+      const debugHeader = document.createElement("div");
+      debugHeader.classList.add("debug-header");
+      debugHeader.textContent = "🔍 Retrieval Debug";
+
+      const debugBody = document.createElement("div");
+      debugBody.classList.add("debug-body", "hidden");
+
+      const countEl = document.createElement("div");
+      countEl.classList.add("debug-count");
+      countEl.textContent = `${citations.length} citation${citations.length !== 1 ? "s" : ""} retrieved`;
+      debugBody.appendChild(countEl);
+
+      // Pre-compute query words for highlighting (filter out short stop words)
+      const queryWords = query.toLowerCase().split(/\s+/).filter(w => w.length > 2);
+
+      for (const item of citations) {
+        const src     = typeof item === "string" ? item : item.source;
+        const chunkId = typeof item === "object"  ? item.chunk_id ?? null : null;
+        const rawText = typeof item === "object"  ? item.text ?? "" : "";
+
+        const block = document.createElement("div");
+        block.style.marginBottom = "6px";
+
+        const line = document.createElement("div");
+        line.classList.add("debug-citation");
+        line.textContent = chunkId !== null ? `📄 ${src} (chunk ${chunkId})` : `📄 ${src}`;
+        block.appendChild(line);
+
+        if (rawText) {
+          let snippet = rawText.slice(0, 120).replace(/\s+/g, " ").trim();
+          if (rawText.length > 120) snippet += "…";
+
+          // Highlight query terms — escape each word before using in regex
+          if (queryWords.length > 0) {
+            const pattern = queryWords
+              .map(w => w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
+              .join("|");
+            snippet = snippet.replace(
+              new RegExp(`(${pattern})`, "gi"),
+              "<mark>$1</mark>"
+            );
+          }
+
+          const snippetEl = document.createElement("div");
+          snippetEl.classList.add("debug-snippet");
+          snippetEl.innerHTML = `"${snippet}"`;
+          block.appendChild(snippetEl);
+        }
+
+        debugBody.appendChild(block);
+      }
+
+      debugHeader.addEventListener("click", () => debugBody.classList.toggle("hidden"));
+
+      debugPanel.appendChild(debugHeader);
+      debugPanel.appendChild(debugBody);
+      container.appendChild(debugPanel);
+
       wrapper.appendChild(container);
       scrollToBottom();
     }
@@ -923,6 +1084,10 @@
       conversationHistory.push({ role: "user", content: query });
       appendUserMessage(query);
       const { wrapper, bubble } = appendAssistantMessage();
+
+      // Show thinking indicator while waiting for first response bytes
+      bubble.innerHTML = `<span class="thinking-row"><span class="spinner"></span>Thinking…</span>`;
+      scrollToBottom();
 
       try {
         const [streamResponse, retrieveResponse] = await Promise.all([
@@ -940,6 +1105,7 @@
 
         if (!streamResponse.ok) {
           bubble.innerHTML = marked.parse(`**Error:** ${streamResponse.status} ${streamResponse.statusText}`);
+          sendBtn.disabled = false;
           return;
         }
 
@@ -947,6 +1113,7 @@
         const decoder = new TextDecoder();
         let assistantMessage = "";
         let buffer = "";
+        let firstChunk = true;
 
         while (true) {
           const { done, value } = await reader.read();
@@ -954,6 +1121,10 @@
           const chunk = decoder.decode(value);
           assistantMessage += chunk;
           buffer += chunk;
+          if (firstChunk) {
+            firstChunk = false;
+            bubble.innerHTML = "";
+          }
           if (buffer.length > 20) {
             bubble.innerHTML = marked.parse(assistantMessage + "▌");
             buffer = "";
@@ -968,7 +1139,7 @@
           const data = await retrieveResponse.json();
           const citations = data.citations || data.sources || [];
           if (citations.length > 0) {
-            renderSources(wrapper, citations);
+            renderSources(wrapper, citations, query);
           }
         }
       } catch (err) {

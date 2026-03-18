@@ -17,15 +17,22 @@ def _get_client() -> OpenAI:
     return _client
 
 
+BATCH_SIZE = 100
+
+
 def embed_chunks(chunks: list[dict]) -> list[dict]:
-    """Add an 'embedding' field to each chunk by calling the OpenAI embeddings API."""
+    """Add an 'embedding' field to each chunk by calling the OpenAI embeddings API.
+
+    Sends requests in batches of BATCH_SIZE to stay within the API token limit.
+    Embedding order is preserved.
+    """
     client = _get_client()
     texts = [chunk["text"] for chunk in chunks]
 
-    response = client.embeddings.create(model=EMBEDDING_MODEL, input=texts)
+    all_embeddings: list = []
+    for i in range(0, len(texts), BATCH_SIZE):
+        batch = texts[i : i + BATCH_SIZE]
+        response = client.embeddings.create(model=EMBEDDING_MODEL, input=batch)
+        all_embeddings.extend(response.data)
 
-    embedded = []
-    for chunk, embedding_obj in zip(chunks, response.data):
-        embedded.append({**chunk, "embedding": embedding_obj.embedding})
-
-    return embedded
+    return [{**chunk, "embedding": obj.embedding} for chunk, obj in zip(chunks, all_embeddings)]

@@ -3,6 +3,7 @@
 
 import chromadb # type: ignore
 from chromadb.api.types import Metadata, QueryResult
+from pathlib import Path
 
 COLLECTION_NAME = "vectormind"
 
@@ -14,7 +15,10 @@ def _get_collection():
     global _client, _collection
 
     if _collection is None:
-        _client = chromadb.PersistentClient(path="./chroma_db")
+        # Resolve absolute path to vectormind/chroma_db
+        db_path = Path(__file__).parent.parent / "chroma_db"
+
+        _client = chromadb.PersistentClient(path=str(db_path))
         _collection = _client.get_or_create_collection(name=COLLECTION_NAME)
 
     return _collection

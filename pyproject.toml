@@ -1,0 +1,10 @@
+[project]
+name = "vectormind"
+version = "0.1.0"
+description = "Vectormind retrieval system"
+authors = [{ name = "Chase" }]
+dependencies = []
+
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"

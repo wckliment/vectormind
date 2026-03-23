@@ -1,8 +1,9 @@
 # vector_store.py
 # Responsible for storing and querying embeddings using ChromaDB.
 
-import chromadb # type: ignore
+import chromadb  # type: ignore
 from chromadb.api.types import Metadata, QueryResult
+from pathlib import Path
 
 COLLECTION_NAME = "vectormind"
 
@@ -14,7 +15,11 @@ def _get_collection():
     global _client, _collection
 
     if _collection is None:
-        _client = chromadb.PersistentClient(path="./chroma_db")
+        # Use absolute path anchored to this repo (NOT current working directory)
+        BASE_DIR = Path(__file__).resolve().parent.parent
+        CHROMA_PATH = BASE_DIR / "chroma_db"
+
+        _client = chromadb.PersistentClient(path=str(CHROMA_PATH))
         _collection = _client.get_or_create_collection(name=COLLECTION_NAME)
 
     return _collection
@@ -32,13 +37,19 @@ def store_embeddings(embedded_chunks: list[dict]) -> None:
         for chunk in embedded_chunks
     ]
 
-    collection.upsert(ids=ids, documents=documents, embeddings=embeddings, metadatas=metadatas)
+    collection.upsert(
+        ids=ids,
+        documents=documents,
+        embeddings=embeddings,
+        metadatas=metadatas,
+    )
 
 
 def query_similar(query_embedding: list[float], k: int = 3) -> QueryResult:
     """Return the k most similar chunks to the given query embedding."""
     collection = _get_collection()
     return collection.query(query_embeddings=[query_embedding], n_results=k)
+
 
 def get_collection():
     """Public accessor used by debugging endpoints."""

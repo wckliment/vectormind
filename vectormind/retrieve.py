@@ -19,7 +19,7 @@ _client: Optional[OpenAI] = None
 
 # BM25 index cache: (index, documents, metadatas, embeddings)
 # Rebuilt lazily; invalidated when new documents are ingested.
-_bm25_cache: Optional[tuple[BM25Okapi, list[str], list[dict], list[list[float]]]] = None
+_bm25_cache: Optional[tuple[Optional[BM25Okapi], list[str], list[dict], list[list[float]]]] = None
 
 
 def _get_client() -> OpenAI:
@@ -39,7 +39,7 @@ def invalidate_bm25_cache() -> None:
     _bm25_cache = None
 
 
-def build_bm25_index() -> tuple[BM25Okapi, list[str], list[dict], list[list[float]]]:
+def build_bm25_index() -> tuple[Optional[BM25Okapi], list[str], list[dict], list[list[float]]]:
     """
     Load all documents from the vector store and build a cached BM25 index.
     Also caches per-document embeddings so MMR can use them for diversity scoring.
@@ -56,6 +56,10 @@ def build_bm25_index() -> tuple[BM25Okapi, list[str], list[dict], list[list[floa
     embeddings = result.get("embeddings")
     if embeddings is None:
         embeddings = []
+
+    if len(documents) < 5:
+        _bm25_cache = (None, documents, metadatas, embeddings)
+        return _bm25_cache
 
     doc_tokens = [doc.lower().split() for doc in documents]
     bm25_index = BM25Okapi(doc_tokens)
@@ -281,11 +285,14 @@ def retrieve(query: str, k: int = 10) -> QueryResult:
     # 3. BM25 keyword search (corpus embeddings cached alongside index)
     # ------------------------------------------------------------------
     bm25_index, all_docs, all_metadatas, all_embeddings = build_bm25_index()
-    kw_results = keyword_search(search_query, bm25_index, all_docs, all_metadatas, k=k)
+    kw_results = []
+    keyword_scores: dict[str, float] = {}
 
-    keyword_scores: dict[str, float] = {
-        r["document"]: r["score"] for r in kw_results
-    }
+    if bm25_index is not None:
+        kw_results = keyword_search(search_query, bm25_index, all_docs, all_metadatas, k=k)
+        keyword_scores = {
+            r["document"]: r["score"] for r in kw_results
+        }
 
     # Extend embedding_map with corpus embeddings (fills in BM25-only candidates)
     for doc, meta, emb in zip(all_docs, all_metadatas, all_embeddings):

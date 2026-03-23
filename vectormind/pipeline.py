@@ -7,24 +7,26 @@ from vectormind.vector_store import store_embeddings
 
 CORPUS_DIR = Path(__file__).parent.parent / "corpus_downloads"
 DOCS_DIR   = Path(__file__).parent.parent / "data" / "docs"
+KNOWLEDGE_DIR = Path(__file__).parent.parent / "data" / "knowledge"
 
 
 def run_pipeline():
     print("Loading documents...")
 
-    # Load from both directories; deduplicate by filename so overlapping
-    # files (e.g. bert_paper.pdf in both) are only indexed once.
+    # TEMP: restrict ingestion to high-signal knowledge only
     seen: set[str] = set()
     docs: list[dict] = []
 
-    for directory in (CORPUS_DIR, DOCS_DIR):
-        if not directory.exists():
-            print(f"  [skip] {directory} does not exist")
-            continue
-        for doc in load_documents(directory):
-            if doc["source"] not in seen:
-                seen.add(doc["source"])
-                docs.append(doc)
+    directory = KNOWLEDGE_DIR
+
+    if not directory.exists():
+        print(f"[error] {directory} does not exist")
+        return
+
+    for doc in load_documents(directory):
+        if doc["source"] not in seen:
+            seen.add(doc["source"])
+            docs.append(doc)
 
     print(f"Documents loaded: {len(docs)}")
 
